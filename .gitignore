@@ -1,1 +1,6 @@
-/target
+# Javascript
+node_modules
+dist
+
+# Rust
+target
