@@ -1,5 +1,12 @@
 package audio_pipeline
 
 type AudioSource interface {
-	get(id string) (Audio, error)
+	Init() error
+	Get(query *AudioSourceQuery) (*Audio, error)
+}
+
+type AudioSourceQuery struct {
+	Id         *string
+	SearchTerm *string
+	Sources    *[]string
 }

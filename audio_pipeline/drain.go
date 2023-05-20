@@ -1,3 +1,7 @@
 package audio_pipeline
 
-type AudioDrain func(chan uint8) error
+type AudioDrain interface {
+	Init() error
+	Drain(<-chan uint8)
+	Purge() error
+}
