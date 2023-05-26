@@ -1,16 +1,3 @@
-import { StyleSheet, View, Text } from 'react-native';
+import { LibraryView } from './views/library';
 
-const styles = StyleSheet.create({
-	container: {
-		flex: 1,
-		backgroundColor: '#fff',
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
-});
-
-export const App = () => (
-	<View style={styles.container}>
-		<Text>Hello world</Text>
-	</View>
-);
+export const App = () => <LibraryView />;
