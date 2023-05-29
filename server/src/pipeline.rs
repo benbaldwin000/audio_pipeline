@@ -1,31 +1,34 @@
-use std::collections::HashMap;
-use crate::{storage::AudioStorage, gateway::AudioGateway, playback::PlaybackState};
+use crate::{gateway::AudioGateway, library::AudioLibrary, playback::ObservablePlaybackState};
+use std::sync::{Arc, RwLock};
 
-
-pub struct AudioPipeline<'a> {
-  pub storage: HashMap<String, &'a mut dyn AudioStorage>,
-  pub gateway: &'a mut dyn AudioGateway,
-  pub playback: PlaybackState<'a>
+pub struct AudioPipeline<'a, G: AudioGateway<'a> + 'static> {
+    gateway: G,
+    library: Arc<RwLock<AudioLibrary>>,
+    playback: Arc<RwLock<ObservablePlaybackState<'a>>>,
 }
 
-impl<'a> AudioPipeline<'a> {
-  pub fn init(&mut self) -> Result<(), String> {
-    for (key, storage) in self.storage.iter_mut() {
-      match storage.init() {
-        Err(err) => return Err(format!("error initializing audio source \"{key}\": {err}")),
-        _ => continue,
-      }
+impl<'a, G: AudioGateway<'a> + 'static> AudioPipeline<'a, G> {
+    pub fn new(library: AudioLibrary, gateway: G) -> Self {
+        Self {
+            gateway,
+            library: Arc::new(RwLock::new(library)),
+            playback: Arc::new(RwLock::new(ObservablePlaybackState::new())),
+        }
     }
 
-    match self.gateway.init() {
-        Err(err) => return Err(format!("error initializing gateway: {err}")),
-        _ => ()
-    };
+    pub fn init(&mut self) -> Result<(), String> {
+        if let Err(err) = self.library.write().unwrap().init() {
+            return Err(format!("error initializing library: {err}"));
+        }
 
-    Ok(())
-  }
+        if let Err(err) = self.gateway.init(&self.library, &self.playback) {
+            return Err(format!("error initializing gateway: {err}"));
+        }
 
-  pub fn open(&mut self) -> Result<(), String> {
-    Ok(())
-  }
+        Ok(())
+    }
+
+    pub fn open(&mut self) -> Result<(), String> {
+        Ok(())
+    }
 }

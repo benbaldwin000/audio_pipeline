@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{fs, collections::HashMap, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,6 +18,12 @@ pub struct TrackQuery {
     pub max_response: u32,
 }
 
+impl Track {
+    pub fn matches(&self, query: &TrackQuery) -> bool {
+        self.title.to_lowercase().contains(query.title.to_lowercase().as_str())
+    }
+}
+
 pub trait AudioStorage {
     fn init(&mut self) -> Result<(), String>;
     fn query_tracks(&self, query: &TrackQuery) -> Result<Vec<Track>, String>;
@@ -27,7 +33,7 @@ pub trait AudioStorage {
 
 pub struct FSAudioStorage {
     dir: String,
-    library_cache: HashMap<u64, Track>
+    library_cache: HashMap<u64, Track>,
 }
 
 impl FSAudioStorage {
@@ -37,13 +43,14 @@ impl FSAudioStorage {
             library_cache: HashMap::new(),
         }
     }
-
 }
 
 impl AudioStorage for FSAudioStorage {
     fn init(&mut self) -> Result<(), String> {
         let library_path = Path::new(&self.dir).join("/library.json");
-        if !library_path.is_file() { return Ok(()) }
+        if !library_path.is_file() {
+            return Ok(());
+        }
 
         let json = match fs::read_to_string(library_path) {
             Ok(json) => json,
@@ -63,21 +70,26 @@ impl AudioStorage for FSAudioStorage {
     }
 
     fn query_tracks(&self, query: &TrackQuery) -> Result<Vec<Track>, String> {
-        Ok(
-            self.library_cache
-                .values()
-                .filter(|track| track.title.to_lowercase().find(query.title.to_lowercase().as_str()).is_some())
-                .skip(query.read_cursor as usize)
-                .take(query.max_response as usize)
-                .map(|track| track.clone())
-                .collect::<Vec<_>>()
-        )
+        Ok(self
+            .library_cache
+            .values()
+            .filter(|track| {
+                track
+                    .title
+                    .to_lowercase()
+                    .find(query.title.to_lowercase().as_str())
+                    .is_some()
+            })
+            .skip(query.read_cursor as usize)
+            .take(query.max_response as usize)
+            .map(|track| track.clone())
+            .collect::<Vec<_>>())
     }
 
     fn get_track(&self, id: u64) -> Result<Track, String> {
         match self.library_cache.get(&id) {
             Some(track) => Ok(track.clone()),
-            None => Err("track not found".to_string())
+            None => Err("track not found".to_string()),
         }
     }
 
