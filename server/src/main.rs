@@ -1,21 +1,26 @@
 pub mod gateway;
 pub mod storage;
 pub mod  pipeline;
+pub mod playback;
+pub mod  library;
 
 use std::collections::HashMap;
 use gateway::HttpAudioGateway;
-use pipeline::{AudioPipeline, PlaybackState};
-use storage::{AudioStorage, FSAudioStorage, Track};
+use pipeline::{AudioPipeline};
+use playback::PlaybackState;
+use storage::{AudioStorage, FSAudioStorage};
 
 fn main() {
-    let mut storage = HashMap::<String, &dyn AudioStorage>::new();
-    let fs_storage = FSAudioStorage::new("./public");
-    storage.insert("fs".to_string(), &fs_storage);
+    let mut storage = HashMap::<String, &mut dyn AudioStorage>::new();
+    let mut fs_storage = FSAudioStorage::new("./public");
+    storage.insert("fs".to_string(), &mut fs_storage);
 
-    let pipeline = AudioPipeline {
+    let mut pipeline = AudioPipeline {
         storage,
-        gateway: &HttpAudioGateway::new(8080),
+        gateway: &mut HttpAudioGateway::new(8080),
         playback: PlaybackState::new(),
     };
 
+    pipeline.init().unwrap();
+    pipeline.open().unwrap();
 }

@@ -1,24 +1,31 @@
 use std::collections::HashMap;
-use crate::{storage::{AudioStorage, Track}, gateway::AudioGateway};
+use crate::{storage::AudioStorage, gateway::AudioGateway, playback::PlaybackState};
 
-pub struct PlaybackState<'a> {
-  is_playing: bool,
-  current_track: Option<&'a Track>,
-  queue: Vec<&'a Track>,
-}
-
-impl<'a> PlaybackState<'a> {
-  pub fn new() -> Self {
-    Self {
-      is_playing: false,
-      current_track: None,
-      queue: Vec::new()
-    }
-  }
-}
 
 pub struct AudioPipeline<'a> {
-  pub storage: HashMap<String, &'a dyn AudioStorage>,
-  pub gateway: &'a dyn AudioGateway,
+  pub storage: HashMap<String, &'a mut dyn AudioStorage>,
+  pub gateway: &'a mut dyn AudioGateway,
   pub playback: PlaybackState<'a>
+}
+
+impl<'a> AudioPipeline<'a> {
+  pub fn init(&mut self) -> Result<(), String> {
+    for (key, storage) in self.storage.iter_mut() {
+      match storage.init() {
+        Err(err) => return Err(format!("error initializing audio source \"{key}\": {err}")),
+        _ => continue,
+      }
+    }
+
+    match self.gateway.init() {
+        Err(err) => return Err(format!("error initializing gateway: {err}")),
+        _ => ()
+    };
+
+    Ok(())
+  }
+
+  pub fn open(&mut self) -> Result<(), String> {
+    Ok(())
+  }
 }
