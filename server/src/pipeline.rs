@@ -1,18 +1,14 @@
-use crate::{gateway::AudioGateway, library::AudioLibrary, playback::ObservablePlaybackState};
-use std::sync::{Arc, RwLock};
+use crate::{library::AudioLibrary};
+use std::sync::{RwLock};
 
-pub struct AudioPipeline<'a, G: AudioGateway<'a> + 'static> {
-    gateway: G,
-    library: Arc<RwLock<AudioLibrary>>,
-    playback: Arc<RwLock<ObservablePlaybackState<'a>>>,
+pub struct AudioPipeline{
+    pub library: RwLock<AudioLibrary>,
 }
 
-impl<'a, G: AudioGateway<'a> + 'static> AudioPipeline<'a, G> {
-    pub fn new(library: AudioLibrary, gateway: G) -> Self {
+impl AudioPipeline {
+    pub fn new(library: RwLock<AudioLibrary>) -> Self {
         Self {
-            gateway,
-            library: Arc::new(RwLock::new(library)),
-            playback: Arc::new(RwLock::new(ObservablePlaybackState::new())),
+            library,
         }
     }
 
@@ -21,14 +17,6 @@ impl<'a, G: AudioGateway<'a> + 'static> AudioPipeline<'a, G> {
             return Err(format!("error initializing library: {err}"));
         }
 
-        if let Err(err) = self.gateway.init(&self.library, &self.playback) {
-            return Err(format!("error initializing gateway: {err}"));
-        }
-
-        Ok(())
-    }
-
-    pub fn open(&mut self) -> Result<(), String> {
         Ok(())
     }
 }

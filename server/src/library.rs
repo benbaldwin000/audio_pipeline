@@ -6,7 +6,7 @@ use std::{
 };
 
 pub struct AudioLibrary {
-    storage: HashMap<String, Box<dyn AudioStorage>>,
+    storage: HashMap<String, Box<dyn AudioStorage + Send + Sync>>,
     session_cache: Mutex<HashMap<u64, Arc<Track>>>,
 }
 
@@ -18,7 +18,7 @@ impl AudioLibrary {
         }
     }
 
-    pub fn register_storage(&mut self, key: &str, storage: impl AudioStorage + 'static) {
+    pub fn register_storage(&mut self, key: &str, storage: impl AudioStorage + Send + Sync + 'static) {
         self.storage.insert(key.to_string(), Box::from(storage));
     } 
 

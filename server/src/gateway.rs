@@ -1,44 +1,71 @@
-use std::sync::{RwLock, Arc};
+use crate::{pipeline::AudioPipeline, storage::Track};
+use axum::{
+    extract::{Query, State},
+    routing::get,
+    Router, Server, Json,
+};
+use hyper::StatusCode;
+use std::{
+    collections::HashMap,
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
 
-use crate::{library::AudioLibrary, playback::ObservablePlaybackState};
-
-pub trait AudioGateway<'a> {
-    fn init(
-        &mut self,
-        library: &Arc<RwLock<AudioLibrary>>,
-        playback: &Arc<RwLock<ObservablePlaybackState<'a>>>,
-    ) -> Result<(), String>;
-    fn run(&mut self) -> Result<(), String>;
+struct GatewayHandlerState {
+    pipeline: AudioPipeline,
 }
 
-pub struct HttpAudioGateway<'a> {
-    port: u32,
-    library: Option<Arc<RwLock<AudioLibrary>>>,
-    playback: Option<Arc<RwLock<ObservablePlaybackState<'a>>>>,
+type SharedGatewayHandlerState = State<Arc<GatewayHandlerState>>;
+
+pub async fn start_http_audio_gateway(port: u16, pipeline: AudioPipeline) {
+    let address = SocketAddr::new(IpAddr::from([127, 0, 0, 1]), port);
+    let handler_ctx = Arc::new(GatewayHandlerState { pipeline });
+    let service = Router::new()
+        .route("/track", get(http_get_track))
+        .route("/track/stream", get(http_get_track_stream))
+        .with_state(handler_ctx)
+        .into_make_service();
+
+    println!("starting server at: {:?}", address);
+    Server::bind(&address).serve(service).await.unwrap();
 }
 
-impl<'a> HttpAudioGateway<'a> {
-    pub fn new(port: u32) -> Self {
-        Self {
-            port,
-            playback: None,
-            library: None,
-        }
-    }
+async fn http_get_track(
+    State(state): SharedGatewayHandlerState,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Track>, StatusCode> {
+    let id_str = match params.get("id") {
+        Some(id) => id,
+        None => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    let id = match u64::from_str_radix(id_str, 16) {
+        Ok(id) => id,
+        Err(_) => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    return match state.pipeline.library.read().unwrap().get_track(id) {
+        Ok(track) => Ok(Json((*track).clone())),
+        Err(_) => Err(StatusCode::NOT_FOUND),
+    };
 }
 
-impl<'a> AudioGateway<'a> for HttpAudioGateway<'a> {
-    fn init(
-        &mut self,
-        library: &Arc<RwLock<AudioLibrary>>,
-        playback: &Arc<RwLock<ObservablePlaybackState<'a>>>,
-    ) -> Result<(), String> {
-        self.library = Some(Arc::clone(library));
-        self.playback = Some(Arc::clone(playback));
-        Ok(())
-    }
+async fn http_get_track_stream(
+    State(state): SharedGatewayHandlerState,
+    Query(params): Query<HashMap<String, String>>
+) -> Result<Vec<u8>, StatusCode> {
+    let id_str = match params.get("id") {
+        Some(id) => id,
+        None => return Err(StatusCode::BAD_REQUEST),
+    };
 
-    fn run(&mut self) -> Result<(), String> {
-        todo!()
-    }
+    let id = match u64::from_str_radix(id_str, 16) {
+        Ok(id) => id,
+        Err(_) => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    return match state.pipeline.library.read().unwrap().get_track_source(id) {
+        Ok(stream) => Ok(stream),
+        Err(_) => Err(StatusCode::NOT_FOUND),
+    };
 }

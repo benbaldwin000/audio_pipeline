@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::Path};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: u64,
     pub title: String,
@@ -20,7 +19,9 @@ pub struct TrackQuery {
 
 impl Track {
     pub fn matches(&self, query: &TrackQuery) -> bool {
-        self.title.to_lowercase().contains(query.title.to_lowercase().as_str())
+        self.title
+            .to_lowercase()
+            .contains(query.title.to_lowercase().as_str())
     }
 }
 
@@ -47,11 +48,7 @@ impl FSAudioStorage {
 
 impl AudioStorage for FSAudioStorage {
     fn init(&mut self) -> Result<(), String> {
-        let library_path = Path::new(&self.dir).join("/library.json");
-        if !library_path.is_file() {
-            return Ok(());
-        }
-
+        let library_path = Path::new(&self.dir).join("library.json");
         let json = match fs::read_to_string(library_path) {
             Ok(json) => json,
             Err(err) => return Err(format!("error reading library: {err}")),
@@ -62,9 +59,8 @@ impl AudioStorage for FSAudioStorage {
             Err(err) => return Err(format!("error deserializing library: {err}")),
         };
 
-        for track in library.iter() {
-            self.library_cache.insert(track.id, track.clone());
-        }
+        let entries = library.into_iter().map(|track| (track.id, track));
+        self.library_cache.extend(entries);
 
         Ok(())
     }
