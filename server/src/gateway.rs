@@ -1,4 +1,4 @@
-use crate::{pipeline::AudioPipeline, storage::Track};
+use crate::{pipeline::AudioPipeline, library::Track};
 use axum::{
     extract::{Query, State},
     routing::get,

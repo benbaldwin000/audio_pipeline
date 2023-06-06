@@ -1,4 +1,4 @@
-use crate::storage::Track;
+use crate::library::Track;
 
 struct PlaybackState<'a> {
     pub is_playing: bool,
