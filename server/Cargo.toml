@@ -11,7 +11,6 @@ serde_json = "1.0.96"
 hyper = { version = "0.14", features = ["full"] }
 axum = "0.6.18"
 tokio = { version = "1.28.2", features = ["full"] }
-tower-http = "0.4.0"
-anyhow = "1.0.71"
-num-traits = "0.2.15"
+symphonia = { version = "0.5.3", features = ["mp3"] }
 wav = "1.0.0"
+vorbis_rs = "0.3.0"

@@ -57,7 +57,11 @@ pub struct ArtistsQuery {}
 
 pub struct ArtistMutation {}
 
-pub trait ReadableStructuredStorage {
+pub trait AudioProvider {
+    // fn init(&self) -> Result<(), String>;
+}
+
+pub trait ReadableStructuredProvider: AudioProvider {
     fn get_track(&self, id: &str) -> Result<Track, String>;
     fn get_many_tracks(&self, query: &TracksQuery) -> Result<Vec<TrackSummary>, String>;
 
@@ -68,7 +72,7 @@ pub trait ReadableStructuredStorage {
     fn get_many_artists(&self, query: &ArtistsQuery) -> Result<Vec<ArtistSummary>, String>;
 }
 
-pub trait WriteableStructuredStorage: ReadableStructuredStorage {
+pub trait WriteableStructuredProvider: AudioProvider {
     fn create_track(&self, value: &Track) -> Result<String, String>;
     fn update_track(&self, mutation: &TrackMutation) -> Result<(), String>;
     fn delete_track(&self, id: &str) -> Result<(), String>;
@@ -82,16 +86,16 @@ pub trait WriteableStructuredStorage: ReadableStructuredStorage {
     fn delete_artist(&self, id: &str) -> Result<(), String>;
 }
 
-pub trait ListenableBlobStorage {}
+pub trait ListenableBlobProvider: AudioProvider {}
 
-pub trait ReadableBlobStorage {
+pub trait ReadableBlobProvider: AudioProvider {
     fn get_audio(&self, id: &str) -> Result<Audio, String>;
     fn stream_audio(&self, id: &str) -> Result<AudioStream, String>;
 
     fn get_cover_art(&self, id: &str) -> Result<Vec<u8>, String>;
 }
 
-pub trait WriteableBlobStorage: ReadableBlobStorage {
+pub trait WriteableBlobProvider: AudioProvider {
     fn create_audio(&self, value: &Audio) -> Result<String, String>;
     fn delete_audio(&self, id: &str) -> Result<(), String>;
 
@@ -99,20 +103,20 @@ pub trait WriteableBlobStorage: ReadableBlobStorage {
     fn delete_cover_art(&self, id: &str) -> Result<(), String>;
 }
 
-pub struct AudioLibrary {
-    readable_structured_storage: HashMap<String, Box<dyn ReadableStructuredStorage>>,
-    writeable_structured_storage: HashMap<String, Box<dyn WriteableStructuredStorage>>,
-    readable_blob_storage: HashMap<String, Box<dyn ReadableBlobStorage>>,
-    writeable_blob_storage: HashMap<String, Box<dyn WriteableBlobStorage>>,
+pub struct AudioLibrary<'a> {
+    readable_structured_providers: HashMap<String, &'a dyn ReadableStructuredProvider>,
+    writeable_structured_providers: HashMap<String, &'a dyn WriteableStructuredProvider>,
+    readable_blob_providers: HashMap<String, &'a dyn ReadableBlobProvider>,
+    writeable_blob_providers: HashMap<String, &'a dyn WriteableBlobProvider>,
 }
 
-impl AudioLibrary {
-    pub fn builder() -> AudioLibraryBuilder {
+impl<'a> AudioLibrary<'a> {
+    pub fn builder() -> AudioLibraryBuilder<'a> {
         AudioLibraryBuilder {
-            readable_structured_storage: HashMap::new(),
-            writeable_structured_storage: HashMap::new(),
-            readable_blob_storage: HashMap::new(),
-            writeable_blob_storage: HashMap::new(),
+            readable_structured_providers: HashMap::new(),
+            writeable_structured_providers: HashMap::new(),
+            readable_blob_providers: HashMap::new(),
+            writeable_blob_providers: HashMap::new(),
         }
     }
 
@@ -177,22 +181,14 @@ impl AudioLibrary {
     }
 
     pub fn get_audio(&self, id: &str) -> Result<Audio, String> {
-        const SAMPLE_RATE: u32 = 44100;
-        const DURATION: u32 = 3000;
-        const SAMPLE_COUNT: u32 = SAMPLE_RATE * DURATION / 1000;
-        const FREQUENCY: f32 = 440.0;
-        const AMPLITUDE: f32 = 0.25;
-
-        let mut samples = Vec::<Sample>::with_capacity((SAMPLE_COUNT) as usize);
-        for i in 0..SAMPLE_COUNT {
-            let t = i as f32 / SAMPLE_RATE as f32;
-            let sample = AMPLITUDE * (2.0 * std::f32::consts::PI * FREQUENCY * t).sin();
-            samples.push(sample);
+        for (_, provider) in self.readable_blob_providers.iter() {
+            let audio_result = provider.get_audio(id);
+            if audio_result.is_ok() {
+                return audio_result
+            }
         }
 
-        Ok(Audio {
-            samples: samples.into_boxed_slice(),
-        })
+        Err("no providers returned audio".to_string())
     }
 
     pub fn stream_audio(&self, id: &str) -> Result<AudioStream, String> {
@@ -220,64 +216,64 @@ impl AudioLibrary {
     }
 }
 
-pub struct AudioLibraryBuilder {
-    readable_structured_storage: HashMap<String, Box<dyn ReadableStructuredStorage>>,
-    writeable_structured_storage: HashMap<String, Box<dyn WriteableStructuredStorage>>,
-    readable_blob_storage: HashMap<String, Box<dyn ReadableBlobStorage>>,
-    writeable_blob_storage: HashMap<String, Box<dyn WriteableBlobStorage>>,
+pub struct AudioLibraryBuilder<'a> {
+    readable_structured_providers: HashMap<String, &'a dyn ReadableStructuredProvider>,
+    writeable_structured_providers: HashMap<String, &'a dyn WriteableStructuredProvider>,
+    readable_blob_providers: HashMap<String, &'a dyn ReadableBlobProvider>,
+    writeable_blob_providers: HashMap<String, &'a dyn WriteableBlobProvider>,
 }
 
-impl AudioLibraryBuilder {
-    pub fn add_readable_structured_storage(
+impl<'a> AudioLibraryBuilder<'a> {
+    pub fn add_readable_structured_provider(
         mut self,
         name: &str,
-        storage: impl ReadableStructuredStorage + 'static,
+        provider: &'a impl ReadableStructuredProvider,
     ) -> Self {
-        self.readable_structured_storage
-            .insert(name.to_string(), Box::new(storage));
+        self.readable_structured_providers
+            .insert(name.to_string(), provider);
 
         self
     }
 
-    pub fn add_writeable_structured_storage(
+    pub fn add_writeable_structured_provider(
         mut self,
         name: &str,
-        storage: impl WriteableStructuredStorage + 'static,
+        provider: &'a impl WriteableStructuredProvider,
     ) -> Self {
-        self.writeable_structured_storage
-            .insert(name.to_string(), Box::new(storage));
+        self.writeable_structured_providers
+            .insert(name.to_string(), provider);
 
         self
     }
 
-    pub fn add_readable_blob_storage(
+    pub fn add_readable_blob_provider(
         mut self,
         name: &str,
-        storage: impl ReadableBlobStorage + 'static,
+        provider: &'a impl ReadableBlobProvider,
     ) -> Self {
-        self.readable_blob_storage
-            .insert(name.to_string(), Box::new(storage));
+        self.readable_blob_providers
+            .insert(name.to_string(), provider);
 
         self
     }
 
-    pub fn add_writeable_blob_storage(
+    pub fn add_writeable_blob_provider(
         mut self,
         name: &str,
-        storage: impl WriteableBlobStorage + 'static,
+        provider: &'a impl WriteableBlobProvider,
     ) -> Self {
-        self.writeable_blob_storage
-            .insert(name.to_string(), Box::new(storage));
+        self.writeable_blob_providers
+            .insert(name.to_string(), provider);
 
         self
     }
 
-    pub fn build(self) -> AudioLibrary {
+    pub fn build(self) -> AudioLibrary<'a> {
         AudioLibrary {
-            readable_structured_storage: self.readable_structured_storage,
-            writeable_structured_storage: self.writeable_structured_storage,
-            readable_blob_storage: self.readable_blob_storage,
-            writeable_blob_storage: self.writeable_blob_storage,
+            readable_structured_providers: self.readable_structured_providers,
+            writeable_structured_providers: self.writeable_structured_providers,
+            readable_blob_providers: self.readable_blob_providers,
+            writeable_blob_providers: self.writeable_blob_providers,
         }
     }
 }
