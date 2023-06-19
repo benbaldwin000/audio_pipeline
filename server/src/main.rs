@@ -1,15 +1,16 @@
 mod library;
-mod pipeline;
-mod providers;
+// mod pipeline;
+mod fs_provider;
 
-use std::{fs::File, io, path::Path};
+use std::{fs::File, io};
+use fs_provider::FsAudioProvider;
+use library::{ReadableBlobProvider, AudioProvider};
 use wav::{BitDepth, WAV_FORMAT_IEEE_FLOAT};
 use symphonia::{
     core::{
         audio::{AudioBufferRef, Channels, SignalSpec},
         errors::Error,
         formats::FormatOptions,
-        io::MediaSourceStream,
         meta::MetadataOptions,
         probe::Hint,
     },
@@ -17,14 +18,14 @@ use symphonia::{
 };
 
 fn main() {
-    let source_path = Path::new("./Electric Prince.mp3");
-    let source_file = File::open(source_path).unwrap();
+    let mut fs_provider = FsAudioProvider::new("./public");
+    fs_provider.init().unwrap();
+
+    let media = fs_provider.get_audio("sine").unwrap();
+
     let meta_opts: MetadataOptions = Default::default();
     let fmt_opts: FormatOptions = Default::default();
-    let mut hint = Hint::new();
-    hint.with_extension(source_path.extension().unwrap().to_str().unwrap());
-
-    let media = MediaSourceStream::new(Box::new(source_file), Default::default());
+    let hint = Hint::new();
     let formatted = get_probe()
         .format(&hint, media, &fmt_opts, &meta_opts)
         .expect("unsupported format");
@@ -48,6 +49,7 @@ fn main() {
         if packet.track_id() != track_id {
             continue;
         }
+
         let buffer = match decoder.decode(&packet) {
             Ok(buffer) => buffer,
             Err(Error::DecodeError(_)) => continue,
@@ -84,7 +86,7 @@ fn main() {
         }
     }
 
-    let mut file = File::create(format!("./audio/{track_id}.wav")).unwrap();
+    let mut file = File::create(format!("./test.wav")).unwrap();
     let sample_bits = match out_samples {
         BitDepth::Eight(_) => 8,
         BitDepth::Sixteen(_) => 16,

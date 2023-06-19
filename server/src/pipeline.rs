@@ -6,8 +6,6 @@ use std::{
     thread::JoinHandle,
 };
 
-use crate::library::{Sample, Audio};
-
 trait AudioPipe: Sync {
     fn pipe(
         &self,
