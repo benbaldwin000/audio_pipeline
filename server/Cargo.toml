@@ -12,5 +12,5 @@ hyper = { version = "0.14", features = ["full"] }
 axum = { version = "0.6.18", features = ["headers"] }
 tokio = { version = "1.28.2", features = ["full"] }
 symphonia = { version = "0.5.3", features = ["mp3"] }
-wav = "1.0.0"
 vorbis_rs = "0.3.0"
+hound = "3.5.0"

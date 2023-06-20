@@ -1,10 +1,10 @@
-use crate::library::{AudioProvider, ReadableBlobProvider, SampleBufferRef, WriteableBlobProvider};
+use crate::{library::{AudioProvider, ReadableBlobProvider, WriteableBlobProvider}, audio::{SampleBufferRef, self, AudioReader}};
 use std::{
     fs::{self, File},
     path::PathBuf,
 };
-use symphonia::core::{audio::SignalSpec, io::MediaSourceStream};
-use wav::{BitDepth, WAV_FORMAT_IEEE_FLOAT};
+use hound::{WavSpec, WavWriter};
+use symphonia::core::{audio::{SignalSpec, SampleBuffer}, io::{MediaSourceStream, MediaSourceStreamOptions}};
 
 pub struct FsAudioProvider {
     path: PathBuf,
@@ -33,7 +33,7 @@ impl AudioProvider for FsAudioProvider {
 }
 
 impl ReadableBlobProvider for FsAudioProvider {
-    fn get_audio(&self, id: &str) -> Result<MediaSourceStream, String> {
+    fn get_audio(&self, id: &str, media_opts: MediaSourceStreamOptions) -> Result<MediaSourceStream, String> {
         let source_path = self.path.join("audio").join(format!("{id}.wav"));
         let source_file = match File::open(source_path) {
             Ok(file) => file,
@@ -42,7 +42,7 @@ impl ReadableBlobProvider for FsAudioProvider {
 
         return Ok(MediaSourceStream::new(
             Box::new(source_file),
-            Default::default(),
+            media_opts,
         ));
     }
 
@@ -54,31 +54,38 @@ impl ReadableBlobProvider for FsAudioProvider {
 impl WriteableBlobProvider for FsAudioProvider {
     fn create_audio(
         &self,
-        audio_ref: SampleBufferRef,
-        spec: &SignalSpec,
+        audio: &mut AudioReader
     ) -> Result<String, String> {
         let id = 0;
-        let mut file = match File::create(format!("audio/{id}.wav")) {
-            Ok(file) => file,
-            Err(e) => return Err(format!("error creating file: {e}")),
+        let signal_spec = audio.signal_spec();
+        let wav_spec = WavSpec {
+            channels: signal_spec.channels.count() as u16,
+            sample_rate: signal_spec.rate,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float
         };
 
-        let mut wav_header = wav::Header::new(0, spec.channels.count() as u16, spec.rate, 0);
+        let file_path = self.path.join("audio").join(format!("{id}.wav"));
+        let mut writer = WavWriter::create(file_path, wav_spec).unwrap();
+        let mut sample_buffer = SampleBuffer::new(64 * 1024, signal_spec);
 
-        match audio_ref {
-            SampleBufferRef::F32(buffer) => {
-                wav_header.audio_format = WAV_FORMAT_IEEE_FLOAT;
-                wav_header.bits_per_sample = 32;
-                if let Err(e) = wav::write(
-                    wav_header,
-                    &BitDepth::ThirtyTwoFloat(Vec::from(buffer.samples())),
-                    &mut file,
-                ) {
-                    return Err(format!("error writing wav file: {e}"));
+        loop {
+            match audio.read_next_as_samples::<f32>(&mut sample_buffer) {
+                Ok(_) => (),
+                Err(e) if e == "EOF" => break,
+                Err(e) => return  Err(format!("error reading samples: {e}"))
+            }
+
+            for sample in sample_buffer.samples() {
+                if let Err(e) = writer.write_sample(*sample) {
+                    return Err(format!("error writing sample: {e}"))
                 }
             }
-            _ => return Err("unsupported format".to_string()),
         };
+
+        if let Err(e) = writer.finalize() {
+            return Err(format!("error closing file: {e}"))
+        }
 
         Ok(id.to_string())
     }

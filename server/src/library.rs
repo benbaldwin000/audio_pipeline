@@ -1,18 +1,7 @@
 use std::collections::HashMap;
-use symphonia::core::{io::MediaSourceStream, audio::{AudioBufferRef, SampleBuffer, AudioBuffer, SignalSpec}, sample::{Sample, u24, i24}};
+use symphonia::core::{io::{MediaSourceStream, MediaSourceStreamOptions}, audio::SignalSpec};
 
-pub enum SampleBufferRef {
-    U8(Box<SampleBuffer<u8>>),
-    U16(Box<SampleBuffer<u16>>),
-    U24(Box<SampleBuffer<u24>>),
-    U32(Box<SampleBuffer<u32>>),
-    S8(Box<SampleBuffer<i8>>),
-    S16(Box<SampleBuffer<i16>>),
-    S24(Box<SampleBuffer<i24>>),
-    S32(Box<SampleBuffer<i32>>),
-    F64(Box<SampleBuffer<f64>>),
-    F32(Box<SampleBuffer<f32>>),
-}
+use crate::audio::{SampleBufferRef, AudioReader};
 
 pub struct Track {
     id: String,
@@ -95,12 +84,12 @@ pub trait WriteableStructuredProvider: AudioProvider {
 pub trait ListenableBlobProvider: AudioProvider {}
 
 pub trait ReadableBlobProvider: AudioProvider {
-    fn get_audio(&self, id: &str) -> Result<MediaSourceStream, String>;
+    fn get_audio(&self, id: &str, media_opts: MediaSourceStreamOptions) -> Result<MediaSourceStream, String>;
     fn get_release_art(&self, id: &str) -> Result<Vec<u8>, String>;
 }
 
 pub trait WriteableBlobProvider: AudioProvider {
-    fn create_audio(&self, data: SampleBufferRef, spec: &SignalSpec) -> Result<String, String>;
+    fn create_audio(&self, audio: &mut AudioReader) -> Result<String, String>;
     fn delete_audio(&self, id: &str) -> Result<(), String>;
 
     fn create_release_art(&self, value: &Vec<u8>) -> Result<String, String>;
@@ -179,9 +168,9 @@ impl<'a> AudioLibrary<'a> {
         todo!()
     }
 
-    pub fn get_audio(&self, id: &str) -> Result<MediaSourceStream, String> {
+    pub fn get_audio(&self, id: &str, media_opts: MediaSourceStreamOptions) -> Result<MediaSourceStream, String> {
         for (_, provider) in self.readable_blob_providers.iter() {
-            let audio_result = provider.get_audio(id);
+            let audio_result = provider.get_audio(id, MediaSourceStreamOptions { ..media_opts });
             if audio_result.is_ok() {
                 return audio_result
             }
@@ -190,11 +179,7 @@ impl<'a> AudioLibrary<'a> {
         Err("no providers returned audio".to_string())
     }
 
-    pub fn stream_audio(&self, id: &str) -> Result<MediaSourceStream, String> {
-        todo!()
-    }
-
-    pub fn create_audio(&self, value: &MediaSourceStream) -> Result<String, String> {
+    pub fn create_audio(&self, source: MediaSourceStream) -> Result<String, String> {
         todo!()
     }
 
