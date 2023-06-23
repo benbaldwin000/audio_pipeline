@@ -1,18 +1,13 @@
-mod library;
-// mod pipeline;
-mod audio;
-mod fs_provider;
+pub mod core;
+pub mod fs_provider;
 
+use crate::core::provider::{ReadableProvider, WriteableProvider};
 use fs_provider::FsAudioProvider;
-use library::{AudioLibrary, WriteableBlobProvider};
 
 fn main() {
     let mut fs_provider = FsAudioProvider::new("./public");
-    let library = AudioLibrary::builder()
-        .add_readable_blob_provider("fs", &mut fs_provider)
-        .build()
-        .unwrap();
+    fs_provider.init().unwrap();
 
-    let mut audio_reader = library.get_audio("sine", Default::default()).unwrap();
-    fs_provider.create_audio(&mut audio_reader).unwrap();
+    let audio_reader = fs_provider.get("sine").unwrap();
+    fs_provider.set("sine_copy", audio_reader).unwrap();
 }
